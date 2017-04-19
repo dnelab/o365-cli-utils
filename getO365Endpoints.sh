@@ -67,7 +67,7 @@ wget="$(which wget)"
 [[ $wget == "" ]] && show_requirements && exit 1
 
 ### retrieve XML source
-xml=$($wget -t1 -q -O- $xmlO365Endpoints)
+xml=$($wget --timeout 3 -t1 -q -O- $xmlO365Endpoints)
 wget_error=$?
 [[ $wget_error != 0 ]] && echo "Error while retrieving endpoints (wget err_code=$wget_error)" && exit 1
 
