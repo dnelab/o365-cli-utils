@@ -57,6 +57,8 @@ o365endpoints="./getO365Endpoints.sh"
 [[ $ip == "" ]] && show_help && exit 1
 [[ $ipcalc == "" ]] && show_requirements && exit 1
 
+ip_ranges=$($o365endpoints | grep '/' | grep -v 'http')
+[[ $? != 0 ]] && echo "error while fetching o365 endpoints"  && exit 1
 
 function isInSubnet() {
 	ip=$1;shift
@@ -72,7 +74,6 @@ function isInSubnet() {
 }
 
 
-ip_ranges=$($o365endpoints | grep '/' | grep -v 'http')
 OLD_IFS=$IFS
 IFS=$'\n'
 for product_iprange in $ip_ranges; do
