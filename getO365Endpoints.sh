@@ -66,6 +66,14 @@ wget="$(which wget)"
 
 [[ $wget == "" ]] && show_requirements && exit 1
 
+xml_cache="/tmp/o365endpoints-`date "+%Y%m%d"`.txt"
+
+if [[ -f $xml_cache ]] 
+then
+	cat $xml_cache
+	exit 0	
+fi
+	
 ### retrieve XML source
 xml=$($wget --timeout 3 -t1 -q -O- $xmlO365Endpoints)
 wget_error=$?
@@ -88,6 +96,7 @@ for line in $(echo "$xml" | grep -v -e 'addresslist' -e '::'); do
       then
         address="$(echo $line | cut -d\> -f 2)"
         echo "$product $address"
+	echo "$product $address" >> $xml_cache
       fi
   fi
 done
