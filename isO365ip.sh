@@ -1,8 +1,8 @@
-#!/bin/bash
+#!/usr/local/bin/bash
 
 show_requirements() {
-  echo 'ipcalc is missing.
-Please install it with `brew install ipcalc`
+  echo 'ipcalc is missing or bash v4 is missing.
+Please install it with `brew install ipcalc or brew install bash`
   ' >&2
 }
 
@@ -20,6 +20,12 @@ Usage:
 
     -h
       Show this help.
+
+Examples:
+
+    $0 192.168.0.1 52.174.144.192
+    $0 52.174.144.192
+
 " >&2
 }
 
@@ -49,16 +55,20 @@ shift $((OPTIND-1))
 
 #######################################
 
-ip="$1"
+ips="$*"
 ipcalc="$(which ipcalc)"
 o365endpoints="./getO365Endpoints.sh"
 
+bash_major_version=${BASH_VERSION:0:1}
 
-[[ $ip == "" ]] && show_help && exit 1
+[[ $ips == "" ]] && show_help && exit 1
 [[ $ipcalc == "" ]] && show_requirements && exit 1
+[[ $bash_major_version != 4 ]] && show_requirements && exit 1
 
 ip_ranges=$($o365endpoints | grep '/' | grep -v 'http')
 [[ $? != 0 ]] && echo "error while fetching o365 endpoints"  && exit 1
+
+declare -A isInSubnet_ret
 
 function isInSubnet() {
 	ip=$1;shift
@@ -69,30 +79,46 @@ function isInSubnet() {
   
   [[ $mask == 32 ]] && [[ $ip == $net ]] && return 1 
   
+	[[ $verbose == 1 ]] && echo "Searching $ip in $net/$mask"
+  
 	match=$($ipcalc -nb $ip $mask | grep '^Network' | tr -s '/' ' ' | cut -d' '  -f 2)
-	[ "$match" = "$net" ] && return 1 || return 0
+  [ "$match" = "$net" ] && return 1
+  return 0
 }
 
 
-OLD_IFS=$IFS
-IFS=$'\n'
-for product_iprange in $ip_ranges; do
+for ip in $ips; do
+
+  OLD_IFS=$IFS
+  IFS=$'\n'
+  for product_iprange in $ip_ranges; do
   
-  [[ $verbose == 1 ]] && echo "Searching against $product_iprange"
+    [[ $verbose == 1 ]] && echo "Searching against $product_iprange"
   
-  iprange=$(echo $product_iprange | cut -f2 -d' ')
+    iprange=$(echo $product_iprange | cut -f2 -d' ')
+
+    IFS=$OLD_IFS
+  
+    ## check for cache
+    if test "${isInSubnet_ret[$ip$iprange]+isset}"; then
+      [[ $verbose == 1 ]] && echo "cache hit ($ip$iprange = ${isInSubnet_ret[$ip$iprange]})"
+      ret=${isInSubnet_ret[$ip$iprange]}
+    else
+      isInSubnet "$ip" "$iprange"
+      ret=$?
+      isInSubnet_ret[$ip$iprange]=$ret
+    fi
+  
+    if [[ $ret == 1 ]]; then
+        product=$(echo $product_iprange | cut -f1 -d' ')
+        echo "IP=$ip belongs to product $product (range=$iprange)"
+    fi
+    IFS=$'\n'  
+  done
 
   IFS=$OLD_IFS
-  isInSubnet "$ip" "$iprange"
-  
-  if [[ $? == 1 ]]; then
-      product=$(echo $product_iprange | cut -f1 -d' ')
-      echo "IP=$ip belongs to product $product (range=$iprange)"
-  fi
-  IFS=$'\n'  
-done
 
-IFS=$OLD_IFS
+done
 
 #isInSubnet '40.101.122.123' '40.96.0.0/13'
 #isInSubnet '40.106.122.123' '40.96.0.0/13'
