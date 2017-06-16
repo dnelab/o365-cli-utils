@@ -56,13 +56,19 @@ shift $((OPTIND-1))
 #######################################
 
 fqdns="$*"
+flags=""
 
 [[ $proxy == "" ]] && show_help && exit 1
+[[ $verbose == 0 ]] && flags="--silent"
 
 for fqdn in $fqdns; do
 
-  http_code=`curl --proxy "$proxy" -o /dev/null --silent --head --write-out '%{http_code}\n' "$fqdn"`
+  http_code=`curl --proxy "$proxy" -o /dev/null $flags -L -X GET --head --write-out '%{http_code}' "$fqdn"`
+  curl_ret=$?
   ok="OK"
+
+  [[ $http_code -eq "000" ]] && ok="KO (curl return code $curl_ret)";
+
   [[ $http_code == 407 ]] && ok="KO";
   echo "$fqdn : $http_code - $ok"
   
