@@ -18,6 +18,9 @@ Usage:
     -v
       Verbose output.
 
+    -r
+      Recursive check (AKA CNAME is also tested - via webdns - if not directly resolved).
+
     -h
       Show this help.
 
@@ -37,15 +40,18 @@ OPTIND=1         # Reset in case getopts has been used previously in the shell.
 # Initialize our own variables:
 fqdns=""
 verbose=0
+recursive=0
 
-while getopts "h?vp:" opt; do
+while getopts "h?vp:r" opt; do
     case "$opt" in
     h|\?)
         show_help
         exit 0
         ;;
-     v)  verbose=1
-         ;;
+    v)  verbose=1
+        ;;
+    r)  recursive=1
+        ;;
      esac
 done
 
@@ -74,4 +80,10 @@ for fqdn in $fqdns; do
   resolvable=$?
   [[ $resolvable == 1 ]] && status="OK" || status="KO"
   echo "$fqdn = $status" 
+  
+  if [[ $resolvable == 0 && $recursive == 1 ]]; then
+    # web resolve and trap CNAME
+    # rev | cut -c 2- | rev| => cut last char (domain.net. => domain.net)
+    ./web-google-dns-resolve.sh -v $fqdn | grep \\.$ | cut -d":" -f2 | sort| uniq |  rev | cut -c 2- | rev| xargs $0   
+  fi
 done;
