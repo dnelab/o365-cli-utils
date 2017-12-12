@@ -70,7 +70,8 @@ nslookup="$(which nslookup)"
 function isResolvable() {
   an_fqdn=$1
 
-  $nslookup $an_fqdn | grep -q -e NXDOMAIN -e 'No answer'
+  $nslookup $an_fqdn | grep -q -e NXDOMAIN 
+  #-e 'No answer' ==> ce n'est pas une erreur
   return $?
 }
 
