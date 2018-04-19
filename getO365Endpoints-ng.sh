@@ -3,6 +3,10 @@
 
 restO365Endpoints="https://endpoints.office.com/endpoints/o365worldwide?clientrequestid=09a38806-ef8b-454a-be25-7e01f129b4a2&TenantName=lfdj"
 
+debug() {
+  [[ $verbose == 1 ]] && echo $1
+}
+
 show_requirements() {
   echo "$1 is missing."
   echo 'Please install it with `brew install '.$1.'`' >&2
@@ -25,17 +29,21 @@ Sample output (product ip_range ports_range category):
   o365 23.100.86.91/32 80 optimize
   o365 23.101.14.229/32 80,443 allow
   o365 23.101.30.126/32 100-200 default
+  o365 23.101.30.126/32 100-200/UDP default
+
 Todo:
 
- - arg : category (1-N)
- - arg : product (1-N)
  - arg : type (ip/dns)
+ - implement caching
 
 Usage:
 
-    $0 [-h] [-v]
+    $0 [-h] [-v] -c <categories>
 
   Options:
+
+    -c
+      Category (optimize, default, allow) -- comma separated
 
     -v
       Verbose output.
@@ -53,8 +61,11 @@ OPTIND=1         # Reset in case getopts has been used previously in the shell.
 # Initialize our own variables:
 verbose=0
 
-while getopts "h?v" opt; do
+while getopts "h?vc:" opt; do
     case "$opt" in
+    c)  
+        categories="$OPTARG"
+        ;;
     h|\?)
         show_help
         exit 0
@@ -75,6 +86,7 @@ jq="$(which jq)"
 
 [[ $wget == "" ]] && show_requirements 'wget' && exit 1
 [[ $jq == "" ]] && show_requirements 'jq' && exit 1
+[[ $categories == "" ]] && show_help && exit 1
 
 json_cache="/tmp/o365endpoints-ng-`date "+%Y%m%d"`.txt"
 
@@ -84,12 +96,6 @@ json_cache="/tmp/o365endpoints-ng-`date "+%Y%m%d"`.txt"
 #	cat $json_cache
 #	exit 0	
 #fi
-
-services=[]
-product=""
-address=""
-ports=""
-category="allow"
 
 
 ### retrieve REST source
@@ -105,95 +111,93 @@ echo $json > $json_cache
 
 # expr to list services
 expr_services="unique_by(.serviceArea)|.[].serviceArea"
-# expr to list keys word specific to a category level
-expr_json_cat_keys="[.[] | keys | .[]] | unique | map(select(. | startswith(\"$category\"))) | join(\" \")"
-# "optimizeTcpPorts",
-# "optimizeUdpPorts",
-# "optimizeUrls"
-
 services=`echo $json | jq -r "$expr_services"`
-category_keys=`echo $json | jq -r "$expr_json_cat_keys"`
 
-## build select categories filter
-expr_json_cat_select_filter=""
-expr_json_cat_bash_out=""
-for category_key in $category_keys; do
-  expr_json_cat_select_filter+=" select(.$category_key) ,"
+categories=`echo $categories | tr -s "," " "` 
+for category in $categories; do 
+
+
+  # expr to list keys word specific to a category level
+  expr_json_cat_keys="[.[] | keys | .[]] | unique | map(select(. | startswith(\"$category\"))) | join(\" \")"
+  # "optimizeTcpPorts",
+  # "optimizeUdpPorts",
+  # "optimizeUrls"
+
+  category_keys=`echo $json | jq -r "$expr_json_cat_keys"`
+
+  ## build select categories filter
+  expr_json_cat_select_filter=""
+  expr_json_cat_bash_out=""
+  for category_key in $category_keys; do
+    expr_json_cat_select_filter+=" select(.$category_key) ,"
+  done;
+
+  # remove last comma
+  expr_json_cat_select_filter=${expr_json_cat_select_filter%?}
+
+  for service in $services; do
+
+    ### la on a pour un service(ex Skype) les regles de la categorie(optimize)
+    service_ressources=`echo $json | jq -r "[.[] | $expr_json_cat_select_filter | select(.serviceArea==\"$service\") ] | unique"`
+
+      # split as bash arrays
+      nb_ressources=`echo $service_ressources | jq -r length`
+      # for each bash array, retrieve key
+      while [ $nb_ressources -gt 0 ] ; do
+        ((nb_ressources--))
+
+        ressource=`echo $service_ressources | jq -r .[$nb_ressources]`
+
+        debug "-------------------"
+        debug $ressource
+
+        # check if ips rules or domains rules
+        has_ip=`echo $ressource | jq -r "has(\"ips\")"`   
+
+        debug "has_ip"
+
+        # maps json to shell variable
+        if $has_ip; then
+          ## add ips and filter out IPv6
+          expr_json_cat_net='[.ips | .[] | select(test("::")==false)]'
+        else 
+        # $nets = `echo $service_ressources | jq -r "[ $expr_json_cat_ips ]" `
+          url_key=$category"Urls"
+          expr_json_cat_net="select(.$url_key)|.$url_key"
+
+        fi;
+
+        ## collect net endpoints
+        nets=`echo $ressource | jq -r "$expr_json_cat_net" `
+        nets=`echo $nets | tr -d "\n"`
+
+        debug "nets"
+
+
+        ## collect port endpoints
+        tport_key=$category"TcpPorts"
+        uport_key=$category"UdpPorts"
+
+        ### TODO !!! transform udp ports
+        ports=`echo $ressource | jq -r "[ .$tport_key? , (.$uport_key+\"/udp\"| select(test(\"^/udp$\")==false)) | strings ]"`
+        ports=`echo $ports | tr -d "\n"`
+
+
+
+        debug "ports : [ .$tport_key? , .$uport_key+\"/udp\"| select(test(\"^/udp$\")==false) | strings ]"
+
+        ## summup in online
+        echo "[[\"$service\"], $nets, $ports , [\"$category\"]]" | jq -r 'combinations | join(" ")'
+        
+        debug "combinations"
+
+
+    ###   echo "$product $address" >> $xml_cache
+
+      done;
+
+  done;
+
 done;
-
-# remove last comma
-expr_json_cat_select_filter=${expr_json_cat_select_filter%?}
-
-for service in $services; do
-
-  ## TODO generate keyword optimize, default or allow at run time
-
-  ### la on a pour un service(ex Skype) les regles de la categorie(optimize)
-  #service_ressources=`echo $json | jq -r "[.[] | select(.optimizeTcpPorts), select(.optimizeUdpPorts), select(.optimizeUrls) | select(.serviceArea==\"$service\") ] | unique"`
-  service_ressources=`echo $json | jq -r "[.[] | $expr_json_cat_select_filter | select(.serviceArea==\"$service\") ] | unique"`
-
-    # split as bash arrays
-    nb_ressources=`echo $service_ressources | jq -r length`
-    # for each bash array, retrieve key
-    while [ $nb_ressources -gt 0 ] ; do
-      ((nb_ressources--))
-
-      ressource=`echo $service_ressources | jq -r .[$nb_ressources]`
-
-      echo "-------------------"
-      echo $ressource
-
-#      rule=`echo $ressource | jq -r "$expr_json_cat_bash_out"`
-
-      # check if ips rules or domains rules
-      has_ip=`echo $ressource | jq -r "has(\"ips\")"`   
-
-      ## dump nets (url or ips)
-
-      ## dump ports (tcp+udp)
-
-      ## harcode cat
-
-      # maps json to shell variable
-      if $has_ip; then
-        ## add ips and filter IPv6
-        #rule+=`echo $ressource | jq -r "\" ips=\"+([.ips | .[] | select(test(\"::\")==false)]| join(\",\"))"`
-        expr_json_cat_net='[.ips | .[] | select(test("::")==false)]'
-      else 
-       # $nets = `echo $service_ressources | jq -r "[ $expr_json_cat_ips ]" `
-        url_key=$category"Urls"
-        expr_json_cat_net="select(.$url_key)|.$url_key"
-
-      fi;
-
-      ## collect net endpoints
-      nets=`echo $ressource | jq -r "$expr_json_cat_net" `
-      nets=`echo $nets | tr -d "\n"`
-
-      ## collect port endpoints
-      tport_key=$category"TcpPorts"
-      uport_key=$category"UdpPorts"
-
-      ### TODO !!! transform udp ports
-      ports=`echo $ressource | jq -r "[ .$tport_key? , .$uport_key+\"/udp\"| select(test(\"^/udp$\")==false) | strings ]"`
-      ports=`echo $ports | tr -d "\n"`
-
-      ## summup in online
-      echo "[[\"$service\"], $nets, $ports , [\"$category\"]]" | jq -r 'combinations | join(" ")'
-    
-   ###   echo "$product $address" >> $xml_cache
-
-    done;
-
-done;
-
-## TODO
-## 
-## out :
-##  - HIPS
-##  - proxy.pac
-##  - firewall
-##  - proxy (SSL OFF, WL auth, etc..)
-
 
 exit 0
