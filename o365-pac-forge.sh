@@ -66,14 +66,26 @@ components="$*"
 
 for component in $components; do
   
-  domains=$($o365endpoints | grep "$component" | grep -v '/' | cut -d" " -f2 | sed -e s/\*.// )
+  domains=$($o365endpoints | grep "$component" | grep -v '/' | cut -d" " -f2)
+
 
   echo "// throw O365 $component traffic through FW directly"
   echo "if("
   firstLoop=""
   for domain in $domains; do
+
+    ldomain=$(echo $domain | sed -e s/\*.// )
+    resolvable=$(dns-resolution-check.sh "$domain" | grep "OK")
+    if [[ $resolvable == 1 ]]; then
+      break
+    fi
+    
+    if [[ $domain == *'*'* ]]; then
+      echo "    $firstLoop dnsDomainIs(host, \"$ldomain\")" 
+    else
+      echo "    $firstLoop host == \"$domain\"" 
+    fi
   
-    echo "    $firstLoop dnsDomainIs(host, \"$domain\")" 
     firstLoop=" ||"
   done
 
