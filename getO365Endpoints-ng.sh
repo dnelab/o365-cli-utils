@@ -1,7 +1,7 @@
 #!/usr/local/bin/bash
 ## ^^ v4 ...
 
-restO365Endpoints="https://endpoints.office.com/endpoints/o365worldwide?clientrequestid=09a38806-ef8b-454a-be25-7e01f129b4a2&TenantName=lfdj"
+restO365Endpoints="https://endpoints.office.com/endpoints/O365Worldwide?clientrequestid=09a38806-ef8b-454a-be25-7e01f129b4a2&TenantName=lfdj"
 
 debug() {
   [[ $verbose == 1 ]] && echo $1
@@ -159,7 +159,7 @@ for category in $categories; do
         # maps json to shell variable
         if $has_ip; then
           ## add ips and filter out IPv6
-          expr_json_cat_net='[.ips | .[] | select(test("::")==false)]'
+          expr_json_cat_net='[.ips | .[] | select(test("::")==false)] | sort'
         else 
         # $nets = `echo $service_ressources | jq -r "[ $expr_json_cat_ips ]" `
           url_key=$category"Urls"
