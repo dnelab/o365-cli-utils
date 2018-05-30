@@ -88,23 +88,22 @@ jq="$(which jq)"
 [[ $jq == "" ]] && show_requirements 'jq' && exit 1
 [[ $categories == "" ]] && show_help && exit 1
 
-json_cache="/tmp/o365endpoints-ng-`date "+%Y%m%d"`.txt"
+cat_as_cache_key=`echo $categories | tr -s "," "-"` 
+json_cache="/tmp/o365endpoints-ng-$cat_as_cache_key-`date "+%Y%m%d"`.txt"
 
 
-#if [[ -f $json_cache ]] 
-#then
-#	cat $json_cache
-#	exit 0	
-#fi
+if [[ -f $json_cache ]] 
+then
+	cat $json_cache
+	exit 0	
+fi
 
+tmp_file=`mktemp`
 
 ### retrieve REST source
 json=$($wget --timeout 3 -t1 -q -O- $restO365Endpoints)
 wget_error=$?
 [[ $wget_error != 0 ]] && echo "Error while retrieving endpoints (wget err_code=$wget_error)" && exit 1
-
-## dev only : cache fetch result
-echo $json > $json_cache
 
 
 ### parse REST
@@ -149,12 +148,12 @@ for category in $categories; do
         ressource=`echo $service_ressources | jq -r .[$nb_ressources]`
 
         debug "-------------------"
-        debug $ressource
+        debug "$ressource"
 
         # check if ips rules or domains rules
         has_ip=`echo $ressource | jq -r "has(\"ips\")"`   
 
-        debug "has_ip"
+        debug "has_ip : $has_ip"
 
         # maps json to shell variable
         if $has_ip; then
@@ -171,7 +170,8 @@ for category in $categories; do
         nets=`echo $ressource | jq -r "$expr_json_cat_net" `
         nets=`echo $nets | tr -d "\n"`
 
-        debug "nets"
+        debug "nets : "
+        debug $nets
 
 
         ## collect port endpoints
@@ -183,11 +183,11 @@ for category in $categories; do
         ports=`echo $ports | tr -d "\n"`
 
 
-
         debug "ports : [ .$tport_key? , .$uport_key+\"/udp\"| select(test(\"^/udp$\")==false) | strings ]"
+        debug "$ports"
 
         ## summup in online
-        echo "[[\"$service\"], $nets, $ports , [\"$category\"]]" | jq -r 'combinations | join(" ")'
+        echo "[[\"$service\"], $nets, $ports , [\"$category\"]]" | jq -r 'combinations | join(" ")' >> $tmp_file
         
         debug "combinations"
 
@@ -199,5 +199,9 @@ for category in $categories; do
   done;
 
 done;
+
+cat $tmp_file | sort | uniq > $json_cache
+cat $json_cache
+rm $tmp_file
 
 exit 0
