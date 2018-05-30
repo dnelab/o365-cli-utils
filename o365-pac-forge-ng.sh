@@ -72,7 +72,7 @@ components="$*"
 
 for component in $components; do
   
-  domains=$($o365endpoints -c $categories | grep $component | grep -v '/' | cut -d" " -f2 | sort | uniq )
+  domains=$($o365endpoints -c $categories | grep -i $component | grep -v '/' | cut -d" " -f2 | sort | uniq )
 
   echo "// throw O365 $component traffic through FW directly"
   echo "if("

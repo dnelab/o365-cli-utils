@@ -68,7 +68,7 @@ components="$*"
 for component in $components; do
   
   echo "$component ALLOW"
-  $o365endpoints -c $categories | grep $component | grep '/' | cut -d" " -f2,3 | sort | uniq
+  $o365endpoints -c $categories | grep -i $component | grep '/' | cut -d" " -f2,3 | sort | uniq
   echo ""
 done
 
