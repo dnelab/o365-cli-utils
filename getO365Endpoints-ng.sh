@@ -1,7 +1,7 @@
 #!/usr/local/bin/bash
 ## ^^ v4 ...
 
-restO365Endpoints="https://endpoints.office.com/endpoints/O365Worldwide?clientrequestid=09a38806-ef8b-454a-be25-7e01f129b4a2&TenantName=lfdj"
+restO365Endpoints="https://endpoints.office.com/endpoints/worldwide?clientrequestid=09a38806-ef8b-454a-be25-7e01f129b4a2&TenantName=lfdj&NoIPv6=1"
 
 debug() {
   [[ $verbose == 1 ]] && echo $1
@@ -101,7 +101,7 @@ fi
 tmp_file=`mktemp`
 
 ### retrieve REST source
-json=$($wget --timeout 3 -t1 -q -O- $restO365Endpoints)
+json=$($wget --timeout 5 -t1 -q -O- $restO365Endpoints)
 wget_error=$?
 [[ $wget_error != 0 ]] && echo "Error while retrieving endpoints (wget err_code=$wget_error)" && exit 1
 
@@ -112,92 +112,68 @@ wget_error=$?
 expr_services="unique_by(.serviceArea)|.[].serviceArea"
 services=`echo $json | jq -r "$expr_services"`
 
+## build select categories filter
+expr_json_cat_select_filter=""
 categories=`echo $categories | tr -s "," " "` 
 for category in $categories; do 
 
+  #  for category_key in $category_keys; do
+  expr_json_cat_select_filter+=" select(.category==\"$category\") ,"
+done;
 
-  # expr to list keys word specific to a category level
-  expr_json_cat_keys="[.[] | keys | .[]] | unique | map(select(. | startswith(\"$category\"))) | join(\" \")"
-  # "optimizeTcpPorts",
-  # "optimizeUdpPorts",
-  # "optimizeUrls"
+# remove last comma
+expr_json_cat_select_filter=${expr_json_cat_select_filter%?}
+  
+for service in $services; do
 
-  category_keys=`echo $json | jq -r "$expr_json_cat_keys"`
+  ### la on a pour un service(ex Skype) les regles de la categorie(optimize)
+  service_ressources=`echo $json | jq -r "[.[] | $expr_json_cat_select_filter | select(.serviceArea==\"$service\") ] | unique"`
+  
+  # split as bash arrays
+  nb_ressources=`echo $service_ressources | jq -r length`
+  # for each bash array, retrieve key
+  while [ $nb_ressources -gt 0 ] ; do
+    ((nb_ressources--))
 
-  ## build select categories filter
-  expr_json_cat_select_filter=""
-  expr_json_cat_bash_out=""
-  for category_key in $category_keys; do
-    expr_json_cat_select_filter+=" select(.$category_key) ,"
-  done;
+    ressource=`echo $service_ressources | jq -r .[$nb_ressources]`
 
-  # remove last comma
-  expr_json_cat_select_filter=${expr_json_cat_select_filter%?}
+    debug "-------------------"
+    debug "$ressource"
 
-  for service in $services; do
+    ## collect url endpoints
+    nets=`echo $ressource | jq -r ".urls + .ips"`
+    nets=`echo $nets | tr -d "\n"`
 
-    ### la on a pour un service(ex Skype) les regles de la categorie(optimize)
-    service_ressources=`echo $json | jq -r "[.[] | $expr_json_cat_select_filter | select(.serviceArea==\"$service\") ] | unique"`
+    debug "nets : "
+    debug "$nets"
 
-      # split as bash arrays
-      nb_ressources=`echo $service_ressources | jq -r length`
-      # for each bash array, retrieve key
-      while [ $nb_ressources -gt 0 ] ; do
-        ((nb_ressources--))
+    ## collect port endpoints
+    tport_key="tcpPorts"
+    uport_key="udpPorts"
 
-        ressource=`echo $service_ressources | jq -r .[$nb_ressources]`
+    ### TODO !!! transform udp ports
+    ports=`echo $ressource | jq -r "[ .$tport_key? , (.$uport_key+\"/udp\"| select(test(\"^/udp$\")==false)) | strings ]"`
+    ports=`echo $ports | tr -d "\n"`
 
-        debug "-------------------"
-        debug "$ressource"
+    debug "ports : [ .$tport_key? , .$uport_key+\"/udp\"| select(test(\"^/udp$\")==false) | strings ]"
+    debug "$ports"
 
-        # check if ips rules or domains rules
-        has_ip=`echo $ressource | jq -r "has(\"ips\")"`   
+    display_name=`echo $ressource | jq -r ".serviceAreaDisplayName"`
 
-        debug "has_ip : $has_ip"
+    debug "display name"
+    debug $display_name
 
-        # maps json to shell variable
-        if $has_ip; then
-          ## add ips and filter out IPv6
-          expr_json_cat_net='[.ips | .[] | select(test("::")==false)] | sort'
-        else 
-        # $nets = `echo $service_ressources | jq -r "[ $expr_json_cat_ips ]" `
-          url_key=$category"Urls"
-          expr_json_cat_net="select(.$url_key)|.$url_key"
+    notes=`echo $ressource | jq -r ".notes | strings"`
 
-        fi;
+    debug "notes"
+    debug $notes
 
-        ## collect net endpoints
-        nets=`echo $ressource | jq -r "$expr_json_cat_net" `
-        nets=`echo $nets | tr -d "\n"`
-
-        debug "nets : "
-        debug $nets
-
-
-        ## collect port endpoints
-        tport_key=$category"TcpPorts"
-        uport_key=$category"UdpPorts"
-
-        ### TODO !!! transform udp ports
-        ports=`echo $ressource | jq -r "[ .$tport_key? , (.$uport_key+\"/udp\"| select(test(\"^/udp$\")==false)) | strings ]"`
-        ports=`echo $ports | tr -d "\n"`
-
-
-        debug "ports : [ .$tport_key? , .$uport_key+\"/udp\"| select(test(\"^/udp$\")==false) | strings ]"
-        debug "$ports"
-
-        ## summup in online
-        echo "[[\"$service\"], $nets, $ports , [\"$category\"]]" | jq -r 'combinations | join(" ")' >> $tmp_file
+    ## summup in online
+    echo "[[\"$service\"], $nets, $ports , [\"$category\"], [\"## $display_name $notes\"]]" | jq -r 'combinations | join(" ")' >> $tmp_file
         
-        debug "combinations"
-
-
-    ###   echo "$product $address" >> $xml_cache
-
-      done;
+    debug "combinations"
 
   done;
-
 done;
 
 cat $tmp_file | sort | uniq > $json_cache
