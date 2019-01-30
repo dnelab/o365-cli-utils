@@ -102,6 +102,7 @@ tmp_file=`mktemp`
 
 ### retrieve REST source
 json=$($wget --timeout 5 -t1 -q -O- $restO365Endpoints)
+json=$($wget --timeout 10 -t1 -q -O- $restO365Endpoints)
 wget_error=$?
 [[ $wget_error != 0 ]] && echo "Error while retrieving endpoints (wget err_code=$wget_error)" && exit 1
 
@@ -116,6 +117,9 @@ services=`echo $json | jq -r "$expr_services"`
 expr_json_cat_select_filter=""
 categories=`echo $categories | tr -s "," " "` 
 for category in $categories; do 
+
+  # strtolower, uppercase
+  category="$(tr '[:lower:]' '[:upper:]' <<< ${category:0:1})${category:1}" 
 
   #  for category_key in $category_keys; do
   expr_json_cat_select_filter+=" select(.category==\"$category\") ,"
