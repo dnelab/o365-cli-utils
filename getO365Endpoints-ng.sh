@@ -171,6 +171,10 @@ for service in $services; do
 
     debug "notes"
     debug $notes
+    
+    category=`echo $ressource | jq -r ".category | strings"`
+    debug "category"
+    debug $category
 
     ## summup in online
     echo "[[\"$service\"], $nets, $ports , [\"$category\"], [\"## $display_name $notes\"]]" | jq -r 'combinations | join(" ")' >> $tmp_file
