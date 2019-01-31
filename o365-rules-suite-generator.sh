@@ -68,4 +68,11 @@ out_file=$dest_dir/$today
 
 cat $file | cut -d " " -f 2 | sort > $out_file-local-fw
 cat $file | cut -d " " -f 2,3 | sort > $out_file-ext-fw
-./oo365-pac-forge-ng.sh -c $cat $products > $out_file-pac
+cat=$(cat $file | cut -d " " -f 4 | sort  | uniq | tr -s "\n" ",")
+cat=${cat%?};
+echo "" > $out_file-pac
+products=$(cat $file| cut -d " " -f 1 | sort | uniq)
+for product in $products; do
+  echo "// $product - $cat" >> $out_file-pac 
+  ./o365-pac-forge-ng.sh -c $cat $product >> $out_file-pac
+done;
