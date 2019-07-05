@@ -73,9 +73,9 @@ for fqdn in $fqdns; do
   
   if [[ $verbose == 1 ]]; then
     ## traversal zones
-    $wget -qO- https://dns.google.com/resolve\?name\=$fqdn | jq -r '. as $all | .Answer[]? |  $all.Question[].name+":"+ .data'
+    $wget --no-check-certificate -qO- https://dns.google.com/resolve\?name\=$fqdn | jq -r '. as $all | .Answer[]? |  $all.Question[].name+":"+ .data'
   else
     ## only IP
-    $wget -qO- https://dns.google.com/resolve\?name\=$fqdn | jq -r '. as $all | .Answer[]? |  select(.type==1) | $all.Question[].name+":"+ .data'
+    $wget --no-check-certificate -qO- https://dns.google.com/resolve\?name\=$fqdn | jq -r '. as $all | .Answer[]? |  select(.type==1) | $all.Question[].name+":"+ .data'
   fi
 done;
