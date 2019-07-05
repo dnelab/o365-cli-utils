@@ -57,13 +57,13 @@ shift $((OPTIND-1))
 
 ips="$*"
 ipcalc="$(which ipcalc)"
-o365endpoints="./getO365Endpoints.sh"
+o365endpoints="./getO365Endpoints-ng.sh -c Optimize,Default,Allow"
 
 bash_major_version=${BASH_VERSION:0:1}
 
 [[ $ips == "" ]] && show_help && exit 1
 [[ $ipcalc == "" ]] && show_requirements && exit 1
-[[ $bash_major_version != 4 ]] && show_requirements && exit 1
+[[ $bash_major_version -lt 4 ]] && show_requirements && exit 1
 
 ip_ranges=$($o365endpoints | grep '/' | grep -v 'http')
 [[ $? != 0 ]] && echo "error while fetching o365 endpoints"  && exit 1
