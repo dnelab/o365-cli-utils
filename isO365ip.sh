@@ -1,5 +1,5 @@
 #!/usr/local/bin/bash
-
+. ./throbber.sh
 show_requirements() {
   echo 'ipcalc is missing or bash v4 is missing.
 Please install it with `brew install ipcalc or brew install bash`
@@ -110,11 +110,15 @@ for ip in $ips; do
     fi
   
     if [[ $ret == 1 ]]; then
+        spinresult
         product=$(echo $product_iprange | cut -f1 -d' ')
         echo "IP=$ip belongs to product $product (range=$iprange)"
+    else
+        spin
     fi
     IFS=$'\n'  
   done
+  endspin
 
   IFS=$OLD_IFS
 
