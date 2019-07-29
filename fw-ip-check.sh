@@ -12,13 +12,16 @@ If a network range is given it test the first IP of the range
   
 Usage:
 
-    $0 [-v] [-h] [-p <port>] <ip>
+    $0 [-v] [-h] [-u] [-p <port>] <ip>
 
   Options:
   
     -p
       Port to test (optionnal, default to 443)
 
+    -u
+      UDP mode
+      
     -v
       Verbose output.
 
@@ -44,8 +47,9 @@ OPTIND=1         # Reset in case getopts has been used previously in the shell.
 ip=""
 port=443
 verbose=0
+mode="-G1" ## default to TCP
 
-while getopts "h?vp:" opt; do
+while getopts "h?vp:u" opt; do
     case "$opt" in
     h|\?)
         show_help
@@ -54,6 +58,8 @@ while getopts "h?vp:" opt; do
      v)  verbose=1
          ;;
      p)  port="$OPTARG"
+         ;;
+     u)  mode="-u"
          ;;
      esac
 done
@@ -91,7 +97,7 @@ function isOpen() {
   an_ip=$1
   a_port=$2
 
-  $nc -w1 -G1 $an_ip $a_port < /dev/null
+  $nc -w1 $mode $an_ip $a_port < /dev/null
   return $?
 }
 

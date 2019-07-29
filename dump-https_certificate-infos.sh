@@ -55,6 +55,13 @@ endpoints="$*"
 for endpoint in $endpoints; do
 
   echo "CA infos for $endpoint"
-  curl --insecure -L -v "$endpoint" 2>&1 | grep -e "^* Server certificate:" -e "^* Issue another request to this URL"
+  curl -m1 --insecure -L -v "$endpoint" 2>&1 | grep -e "^* Server certificate:" -e "^* Issue another request to this URL" -e "*  subject:" -e "*  issuer:"
   echo "----------------------------"
 done
+
+# Server certificate:
+#  subject: C=US; ST=California; L=Mountain View; O=Google LLC; CN=*.google.com
+#  start date: Apr 24 10:34:31 2018 GMT
+#  expire date: Jul 17 09:27:00 2018 GMT
+#  issuer: C=US; O=Google Trust Services; CN=Google Internet Authority G3
+#  SSL certificate verify ok.
