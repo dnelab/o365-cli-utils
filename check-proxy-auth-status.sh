@@ -56,14 +56,24 @@ shift $((OPTIND-1))
 #######################################
 
 fqdns="$*"
-flags=""
+flags="-f -s" # fail silent
 
 [[ $proxy == "" ]] && show_help && exit 1
 [[ $verbose == 0 ]] && flags="--silent"
 
 for fqdn in $fqdns; do
 
-  http_code=`curl --proxy "$proxy" -o /dev/null $flags -L -X GET --head --write-out '%{http_code}' "$fqdn"`
+  ## check if we are dealing with http or https FQDN
+  S=${fqdn:4:1}
+
+  write_out=""
+  if [[ "$S" = "s" ]]; then
+    write_out="http_connect"
+  else 
+    write_out="http_code"
+  fi
+
+  http_code=`curl --proxy "$proxy" -o /dev/null $flags -L -X GET --head --write-out "%{$write_out}" "$fqdn"`
   curl_ret=$?
   ok="OK"
 
