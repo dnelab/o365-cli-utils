@@ -1,4 +1,4 @@
-#!/usr/local/bin/bash
+#!/bin/bash
 
 show_help() {
   echo "Dump CA chain name of an https ressources.
@@ -55,7 +55,7 @@ endpoints="$*"
 for endpoint in $endpoints; do
 
   echo "CA infos for $endpoint"
-  curl -m1 --insecure -L -v "$endpoint" 2>&1 | grep -e "^* Server certificate:" -e "^* Issue another request to this URL" -e "*  subject:" -e "*  issuer:"
+  curl -m2 --insecure -L -v "$endpoint" 2>&1 | grep -e "^* Server certificate:" -e "^* Issue another request to this URL" -e "*  subject:" -e "*  issuer:"
   echo "----------------------------"
 done
 
