@@ -56,7 +56,7 @@ shift $((OPTIND-1))
 #######################################
 
 fqdns="$*"
-flags="-f -s" # fail silent
+flags="-f -s -I" # fail silent header only
 
 [[ $proxy == "" ]] && show_help && exit 1
 [[ $verbose == 0 ]] && flags="--silent"
